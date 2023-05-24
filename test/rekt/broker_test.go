@@ -33,6 +33,38 @@ import (
 	b "knative.dev/eventing/test/rekt/resources/broker"
 )
 
+func TestBrokerWithManyTriggers(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.Test(ctx, t, broker.BrokerWithManyTriggers())
+}
+
+// TestBrokerWorkFlowWithTransformation test broker transformation respectively follow
+// channel flow and trigger event flow.
+func TestBrokerWorkFlowWithTransformation(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.TestSet(ctx, t, broker.BrokerWorkFlowWithTransformation())
+}
+
 func TestBrokerAsMiddleware(t *testing.T) {
 	t.Parallel()
 
@@ -103,7 +135,7 @@ func TestBrokerConformance(t *testing.T) {
 
 	// Install and wait for a Ready Broker.
 	env.Prerequisite(ctx, t, broker.GoesReady("default", b.WithEnvConfig()...))
-	env.TestSet(ctx, t, broker.ControlPlaneConformance("default"))
+	env.TestSet(ctx, t, broker.ControlPlaneConformance("default", b.WithEnvConfig()...))
 	env.TestSet(ctx, t, broker.DataPlaneConformance("default"))
 }
 
@@ -118,4 +150,81 @@ func TestBrokerDefaultDelivery(t *testing.T) {
 	)
 
 	env.Test(ctx, t, broker.DefaultDeliverySpec())
+}
+
+// TestBrokerPreferHeaderCheck test if the test message without explicit prefer header
+// should have it after fanout.
+func TestBrokerPreferHeaderCheck(t *testing.T) {
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.Test(ctx, t, broker.BrokerPreferHeaderCheck())
+}
+
+// TestBrokerRedelivery test Broker reply with a bad status code respectively
+// following the fibonacci sequence and Drop first N events
+func TestBrokerRedelivery(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.TestSet(ctx, t, broker.BrokerRedelivery())
+}
+
+func TestBrokerDeadLetterSinkExtensions(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.TestSet(ctx, t, broker.BrokerDeadLetterSinkExtensions())
+}
+
+func TestBrokerDeliverLongMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.TestSet(ctx, t, broker.BrokerDeliverLongMessage())
+}
+
+func TestBrokerDeliverLongResponseMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+		environment.WithPollTimings(5*time.Second, 4*time.Minute),
+	)
+
+	env.TestSet(ctx, t, broker.BrokerDeliverLongResponseMessage())
 }

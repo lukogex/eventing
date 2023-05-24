@@ -17,19 +17,26 @@ limitations under the License.
 package containersource_test
 
 import (
+	"embed"
 	"os"
 
+	testlog "knative.dev/reconciler-test/pkg/logging"
 	"knative.dev/reconciler-test/pkg/manifest"
 )
 
+//go:embed *.yaml
+var yaml embed.FS
+
 func Example_min() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
 		"namespace": "bar",
+		"args":      "--period=1",
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -47,7 +54,8 @@ func Example_min() {
 	//     spec:
 	//       containers:
 	//       - name: heartbeats
-	//         image: ko://knative.dev/eventing/test/test_images/heartbeats
+	//         image: ko://knative.dev/eventing/cmd/heartbeats
+	//         imagePullPolicy: IfNotPresent
 	//         args:
 	//         - --period=1
 	//         env:
@@ -58,10 +66,12 @@ func Example_min() {
 }
 
 func Example_full() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
 		"namespace": "bar",
+		"args":      "--period=1",
 		"ceOverrides": map[string]interface{}{
 			"extensions": map[string]string{
 				"ext1": "val1",
@@ -78,7 +88,7 @@ func Example_full() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -106,7 +116,8 @@ func Example_full() {
 	//     spec:
 	//       containers:
 	//       - name: heartbeats
-	//         image: ko://knative.dev/eventing/test/test_images/heartbeats
+	//         image: ko://knative.dev/eventing/cmd/heartbeats
+	//         imagePullPolicy: IfNotPresent
 	//         args:
 	//         - --period=1
 	//         env:

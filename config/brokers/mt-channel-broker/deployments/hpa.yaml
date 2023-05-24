@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: broker-ingress-hpa
   namespace: knative-eventing
   labels:
-    eventing.knative.dev/release: devel
     app.kubernetes.io/component: broker-ingress
     app.kubernetes.io/version: devel
     app.kubernetes.io/name: knative-eventing
@@ -37,13 +36,12 @@ spec:
         type: Utilization
         averageUtilization: 70
 ---
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: broker-filter-hpa
   namespace: knative-eventing
   labels:
-    eventing.knative.dev/release: devel
     app.kubernetes.io/component: broker-filter
     app.kubernetes.io/version: devel
     app.kubernetes.io/name: knative-eventing

@@ -50,7 +50,9 @@ func ChannelTracingTestHelperWithChannelTestRunner(
 
 // setupChannelTracing is the general setup for TestChannelTracing. It creates the following:
 // SendEvents (Pod) -> Channel -> Subscription -> K8s Service -> Mutate (Pod)
-//                                                                   v
+//
+//	v
+//
 // LogEvents (Pod) <- K8s Service <- Subscription  <- Channel <- (Reply) Subscription
 // It returns the expected trace tree and a match function that is expected to be sent
 // by the SendEvents Pod and should be present in the RecordEvents list of events.
@@ -154,7 +156,7 @@ func setupChannelTracingWithReply(
 						// 4. Channel sends event to Mutator pod.
 						Span: tracinghelper.MatchHTTPSpanWithReply(
 							model.Client,
-							tracinghelper.WithHTTPHostAndPath(
+							tracinghelper.WithHTTPURL(
 								fmt.Sprintf("%s.%s.svc", mutatingPod.Name, client.Namespace),
 								"",
 							),
@@ -181,7 +183,7 @@ func setupChannelTracingWithReply(
 								// 7. Channel sends reply from Mutator Pod to the reply Channel.
 								Span: tracinghelper.MatchHTTPSpanNoReply(
 									model.Client,
-									tracinghelper.WithHTTPHostAndPath(
+									tracinghelper.WithHTTPURL(
 										fmt.Sprintf("%s-kn-channel.%s.svc", replyChannelName, client.Namespace),
 										"",
 									),
@@ -205,7 +207,7 @@ func setupChannelTracingWithReply(
 														// 10. Reply Channel sends event to the logging Pod.
 														Span: tracinghelper.MatchHTTPSpanNoReply(
 															model.Client,
-															tracinghelper.WithHTTPHostAndPath(
+															tracinghelper.WithHTTPURL(
 																fmt.Sprintf("%s.%s.svc", recordEventsPod.Name, client.Namespace),
 																"",
 															),
@@ -242,7 +244,7 @@ func setupChannelTracingWithReply(
 			// 1. Sending pod sends event to Channel (only if the sending pod generates a span).
 			Span: tracinghelper.MatchHTTPSpanNoReply(
 				model.Client,
-				tracinghelper.WithHTTPHostAndPath(
+				tracinghelper.WithHTTPURL(
 					fmt.Sprintf("%s-kn-channel.%s.svc", channelName, client.Namespace),
 					"",
 				),

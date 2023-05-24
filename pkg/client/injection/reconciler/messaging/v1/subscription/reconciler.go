@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,7 @@ import (
 	fmt "fmt"
 
 	zap "go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	equality "k8s.io/apimachinery/pkg/api/equality"
 	errors "k8s.io/apimachinery/pkg/api/errors"
@@ -272,7 +273,7 @@ func (r *reconcilerImpl) Reconcile(ctx context.Context, key string) error {
 		// the elected leader is expected to write modifications.
 		logger.Warn("Saw status changes when we aren't the leader!")
 	default:
-		if err = r.updateStatus(ctx, original, resource); err != nil {
+		if err = r.updateStatus(ctx, logger, original, resource); err != nil {
 			logger.Warnw("Failed to update resource status", zap.Error(err))
 			r.Recorder.Eventf(resource, corev1.EventTypeWarning, "UpdateFailed",
 				"Failed to update status for %q: %v", resource.Name, err)
@@ -308,7 +309,7 @@ func (r *reconcilerImpl) Reconcile(ctx context.Context, key string) error {
 	return nil
 }
 
-func (r *reconcilerImpl) updateStatus(ctx context.Context, existing *v1.Subscription, desired *v1.Subscription) error {
+func (r *reconcilerImpl) updateStatus(ctx context.Context, logger *zap.SugaredLogger, existing *v1.Subscription, desired *v1.Subscription) error {
 	existing = existing.DeepCopy()
 	return reconciler.RetryUpdateConflicts(func(attempts int) (err error) {
 		// The first iteration tries to use the injectionInformer's state, subsequent attempts fetch the latest state via API.
@@ -327,8 +328,10 @@ func (r *reconcilerImpl) updateStatus(ctx context.Context, existing *v1.Subscrip
 			return nil
 		}
 
-		if diff, err := kmp.SafeDiff(existing.Status, desired.Status); err == nil && diff != "" {
-			logging.FromContext(ctx).Debug("Updating status with: ", diff)
+		if logger.Desugar().Core().Enabled(zapcore.DebugLevel) {
+			if diff, err := kmp.SafeDiff(existing.Status, desired.Status); err == nil && diff != "" {
+				logger.Debug("Updating status with: ", diff)
+			}
 		}
 
 		existing.Status = desired.Status
@@ -343,23 +346,14 @@ func (r *reconcilerImpl) updateStatus(ctx context.Context, existing *v1.Subscrip
 // updateFinalizersFiltered will update the Finalizers of the resource.
 // TODO: this method could be generic and sync all finalizers. For now it only
 // updates defaultFinalizerName or its override.
-func (r *reconcilerImpl) updateFinalizersFiltered(ctx context.Context, resource *v1.Subscription) (*v1.Subscription, error) {
-
-	getter := r.Lister.Subscriptions(resource.Namespace)
-
-	actual, err := getter.Get(resource.Name)
-	if err != nil {
-		return resource, err
-	}
-
+func (r *reconcilerImpl) updateFinalizersFiltered(ctx context.Context, resource *v1.Subscription, desiredFinalizers sets.String) (*v1.Subscription, error) {
 	// Don't modify the informers copy.
-	existing := actual.DeepCopy()
+	existing := resource.DeepCopy()
 
 	var finalizers []string
 
 	// If there's nothing to update, just return.
 	existingFinalizers := sets.NewString(existing.Finalizers...)
-	desiredFinalizers := sets.NewString(resource.Finalizers...)
 
 	if desiredFinalizers.Has(r.finalizerName) {
 		if existingFinalizers.Has(r.finalizerName) {
@@ -416,10 +410,8 @@ func (r *reconcilerImpl) setFinalizerIfFinalizer(ctx context.Context, resource *
 		finalizers.Insert(r.finalizerName)
 	}
 
-	resource.Finalizers = finalizers.List()
-
 	// Synchronize the finalizers filtered by r.finalizerName.
-	return r.updateFinalizersFiltered(ctx, resource)
+	return r.updateFinalizersFiltered(ctx, resource, finalizers)
 }
 
 func (r *reconcilerImpl) clearFinalizer(ctx context.Context, resource *v1.Subscription, reconcileEvent reconciler.Event) (*v1.Subscription, error) {
@@ -443,8 +435,6 @@ func (r *reconcilerImpl) clearFinalizer(ctx context.Context, resource *v1.Subscr
 		finalizers.Delete(r.finalizerName)
 	}
 
-	resource.Finalizers = finalizers.List()
-
 	// Synchronize the finalizers filtered by r.finalizerName.
-	return r.updateFinalizersFiltered(ctx, resource)
+	return r.updateFinalizersFiltered(ctx, resource, finalizers)
 }

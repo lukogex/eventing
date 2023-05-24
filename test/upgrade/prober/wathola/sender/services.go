@@ -20,10 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,9 +31,10 @@ import (
 	"github.com/wavesoftware/go-ensure"
 	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/trace"
+	"knative.dev/pkg/tracing/propagation/tracecontextb3"
+
 	"knative.dev/eventing/test/upgrade/prober/wathola/config"
 	"knative.dev/eventing/test/upgrade/prober/wathola/event"
-	"knative.dev/pkg/tracing/propagation/tracecontextb3"
 )
 
 const (
@@ -48,7 +48,6 @@ var (
 		"supported by any registered event sender")
 	log                     = config.Log
 	senderConfig            = &config.Instance.Sender
-	eventSenders            = make([]EventSender, 0, 1)
 	eventSendersWithContext = make([]EventSenderWithContext, 0, 1)
 )
 
@@ -58,16 +57,13 @@ type sender struct {
 	// totalRequests is the number of all the send event requests
 	totalRequests int
 	// unavailablePeriods is an array for non-zero retries for each event
-	unavailablePeriods []time.Duration
+	unavailablePeriods []event.UnavailablePeriod
 }
 
 func (s *sender) SendContinually() {
 	var shutdownCh = make(chan struct{})
 	defer func() {
 		s.sendFinished()
-		// Give time to send tracing information.
-		// https://github.com/knative/pkg/issues/2475
-		time.Sleep(5 * time.Second)
 	}()
 
 	go func() {
@@ -80,29 +76,40 @@ func (s *sender) SendContinually() {
 	}()
 
 	var start time.Time
+	var currentStep *event.Step
+	var err error
 	retry := 0
+	var lastErr error
 	for {
 		select {
 		case <-shutdownCh:
 			// If there is ongoing event transition, we need to push to retries too.
 			if retry != 0 {
-				s.unavailablePeriods = append(s.unavailablePeriods, time.Since(start))
+				s.unavailablePeriods = append(s.unavailablePeriods, event.UnavailablePeriod{
+					Step:    currentStep,
+					Period:  time.Since(start),
+					LastErr: err.Error(),
+				})
 			}
 			return
 		default:
 		}
-		err := s.sendStep()
+		currentStep, err = s.sendStep()
 		if err != nil {
 			if retry == 0 {
 				start = time.Now()
 			}
-			log.Warnf("Could not send step event %v, retrying (%d)",
-				s.eventsSent, retry)
-			log.Debug("Error: ", err)
+			log.Warnf("Could not send step event %v, retrying (%d): %v",
+				s.eventsSent, retry, err)
 			retry++
+			lastErr = err
 		} else {
 			if retry != 0 {
-				s.unavailablePeriods = append(s.unavailablePeriods, time.Since(start))
+				s.unavailablePeriods = append(s.unavailablePeriods, event.UnavailablePeriod{
+					Step:    currentStep,
+					Period:  time.Since(start),
+					LastErr: lastErr.Error(),
+				})
 				log.Warnf("Event sent after %v retries", retry)
 				retry = 0
 			}
@@ -132,14 +139,7 @@ func NewCloudEvent(data interface{}, typ string) cloudevents.Event {
 
 // ResetEventSenders will reset configured event senders to defaults.
 func ResetEventSenders() {
-	eventSenders = make([]EventSender, 0, 1)
 	eventSendersWithContext = make([]EventSenderWithContext, 0, 1)
-}
-
-// RegisterEventSender will register a EventSender to be used.
-// Deprecated. Use RegisterEventSenderWithContext.
-func RegisterEventSender(es EventSender) {
-	eventSenders = append(eventSenders, es)
 }
 
 // RegisterEventSenderWithContext will register EventSenderWithContext to be used.
@@ -151,21 +151,12 @@ func RegisterEventSenderWithContext(es EventSenderWithContext) {
 func SendEvent(ctx context.Context, ce cloudevents.Event, endpoint interface{}) error {
 	sendersWithCtx := make([]EventSenderWithContext, 0, len(eventSendersWithContext)+1)
 	sendersWithCtx = append(sendersWithCtx, eventSendersWithContext...)
-	if len(eventSendersWithContext) == 0 && len(eventSenders) == 0 {
+	if len(eventSendersWithContext) == 0 {
 		sendersWithCtx = append(sendersWithCtx, httpSender{})
 	}
 	for _, eventSender := range sendersWithCtx {
 		if eventSender.Supports(endpoint) {
 			return eventSender.SendEventWithContext(ctx, ce, endpoint)
-		}
-	}
-	// Backwards compatibility.
-	// TODO: Remove when downstream repositories start using EventSenderWithContext.
-	senders := make([]EventSender, 0, len(eventSenders)+1)
-	senders = append(senders, eventSenders...)
-	for _, eventSender := range senders {
-		if eventSender.Supports(endpoint) {
-			return eventSender.SendEvent(ce, endpoint)
 		}
 	}
 	return fmt.Errorf("%w: endpoint is %#v", ErrEndpointTypeNotSupported, endpoint)
@@ -206,7 +197,7 @@ func (h httpSender) SendEventWithContext(ctx context.Context, ce cloudevents.Eve
 	return result
 }
 
-func (s *sender) sendStep() error {
+func (s *sender) sendStep() (*event.Step, error) {
 	step := event.Step{Number: s.eventsSent + 1}
 	ce := NewCloudEvent(step, event.StepType)
 	ctx, span := PopulateSpanWithEvent(context.Background(), ce, Name)
@@ -218,10 +209,10 @@ func (s *sender) sendStep() error {
 	// Record every request regardless of the result
 	s.totalRequests++
 	if err != nil {
-		return err
+		return &step, err
 	}
 	s.eventsSent++
-	return nil
+	return &step, nil
 }
 
 func (s *sender) sendFinished() {

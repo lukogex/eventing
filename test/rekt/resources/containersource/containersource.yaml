@@ -39,14 +39,23 @@ spec:
     uri: {{ .sink.uri }}
     {{ end }}
   template:
+    {{ if .podannotations }}
+    metadata:
+      annotations:
+        {{ range $key, $value := .podannotations }}
+        {{ $key }}: "{{ $value }}"
+        {{ end }}
+    {{ end }}
     spec:
       containers:
       - name: heartbeats
-        image: ko://knative.dev/eventing/test/test_images/heartbeats
+        image: ko://knative.dev/eventing/cmd/heartbeats
+        imagePullPolicy: IfNotPresent
         args:
-        - --period=1
+        - {{ .args }}
         env:
         - name: POD_NAME
           value: heartbeats
         - name: POD_NAMESPACE
           value: {{ .namespace }}
+

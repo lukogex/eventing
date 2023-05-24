@@ -17,7 +17,6 @@ kind: ClusterRole
 metadata:
   name: knative-eventing-webhook
   labels:
-    eventing.knative.dev/release: devel
     app.kubernetes.io/version: devel
     app.kubernetes.io/name: knative-eventing
 rules:
@@ -97,6 +96,18 @@ rules:
     resources:
       - "leases"
     verbs: *everything
+
+  # For creating events
+  - apiGroups:
+      - ""
+      - "events.k8s.io"
+    resources:
+      - "events"
+    verbs:
+      - "get"
+      - "list"
+      - "create"
+      - "patch"
 
   # Necessary for conversion webhook. These are copied from the serving
   # TODO: Do we really need all these permissions?

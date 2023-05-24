@@ -24,10 +24,6 @@ import (
 	"testing"
 
 	"k8s.io/utils/pointer"
-	_ "knative.dev/pkg/system/testing"
-
-	"knative.dev/reconciler-test/pkg/manifest"
-
 	eventingduck "knative.dev/eventing/pkg/apis/duck/v1"
 	"knative.dev/eventing/test/rekt/features/apiserversource"
 	"knative.dev/eventing/test/rekt/features/broker"
@@ -35,13 +31,24 @@ import (
 	"knative.dev/eventing/test/rekt/features/parallel"
 	"knative.dev/eventing/test/rekt/features/pingsource"
 	"knative.dev/eventing/test/rekt/features/sequence"
+	"knative.dev/eventing/test/rekt/features/sinkbinding"
 	b "knative.dev/eventing/test/rekt/resources/broker"
 	"knative.dev/eventing/test/rekt/resources/channel_impl"
+	"knative.dev/eventing/test/rekt/resources/channel_template"
 	"knative.dev/eventing/test/rekt/resources/delivery"
+	presources "knative.dev/eventing/test/rekt/resources/parallel"
 	ps "knative.dev/eventing/test/rekt/resources/pingsource"
 	sresources "knative.dev/eventing/test/rekt/resources/sequence"
+	sb "knative.dev/eventing/test/rekt/resources/sinkbinding"
+	_ "knative.dev/pkg/system/testing"
+	"knative.dev/reconciler-test/pkg/feature"
+	"knative.dev/reconciler-test/pkg/manifest"
+	"knative.dev/reconciler-test/pkg/resources/deployment"
+	"knative.dev/reconciler-test/pkg/resources/service"
+)
 
-	presources "knative.dev/eventing/test/rekt/resources/parallel"
+const (
+	heartbeatsImage = "ko://knative.dev/eventing/cmd/heartbeats"
 )
 
 // TestSmoke_Broker
@@ -193,12 +200,31 @@ func TestSmoke_ParallelDelivery(t *testing.T) {
 	}
 
 	for _, name := range names {
-		template := presources.ChannelTemplate{
+		template := channel_template.ChannelTemplate{
 			TypeMeta: channel_impl.TypeMeta(),
 			Spec:     map[string]interface{}{},
 		}
 		SpecDelivery(template.Spec)
 		env.Test(ctx, t, parallel.GoesReady(name, presources.WithChannelTemplate(template)))
+	}
+}
+
+// TestSmoke_Parallel
+func TestSmoke_Parallel_with_no_filter(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment()
+	t.Cleanup(env.Finish)
+
+	names := []string{
+		"customname",
+		"name-with-dash",
+		"name1with2numbers3",
+		"name63-0123456789012345678901234567890123456789012345678901234",
+	}
+
+	for _, name := range names {
+		env.Test(ctx, t, parallel.GoesReadyWithoutFilters(name))
 	}
 }
 
@@ -217,7 +243,7 @@ func TestSmoke_Sequence(t *testing.T) {
 	}
 
 	for _, name := range names {
-		template := sresources.ChannelTemplate{
+		template := channel_template.ChannelTemplate{
 			TypeMeta: channel_impl.TypeMeta(),
 			Spec:     map[string]interface{}{},
 		}
@@ -240,7 +266,7 @@ func TestSmoke_SequenceDelivery(t *testing.T) {
 	}
 
 	for _, name := range names {
-		template := sresources.ChannelTemplate{
+		template := channel_template.ChannelTemplate{
 			TypeMeta: channel_impl.TypeMeta(),
 			Spec:     map[string]interface{}{},
 		}
@@ -251,5 +277,39 @@ func TestSmoke_SequenceDelivery(t *testing.T) {
 
 func SpecDelivery(spec map[string]interface{}) {
 	linear := eventingduck.BackoffPolicyLinear
-	delivery.WithRetry(10, &linear, pointer.StringPtr("PT1S"))(spec)
+	delivery.WithRetry(10, &linear, pointer.String("PT1S"))(spec)
+}
+
+// TestSmoke_SinkBinding
+func TestSmoke_SinkBinding(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment()
+	t.Cleanup(env.Finish)
+
+	names := []string{
+		"customname",
+		"name-with-dash",
+		"name1with2numbers3",
+		"name63-01234567890123456789012345678901234567890123456789012345",
+	}
+
+	for _, name := range names {
+		f := sinkbinding.GoesReady(name)
+
+		sink := feature.MakeRandomK8sName("sink")
+		f.Setup("install a service", service.Install(sink,
+			service.WithSelectors(map[string]string{"app": "rekt"})))
+
+		subject := feature.MakeRandomK8sName("subject")
+		f.Setup("install a deployment", deployment.Install(subject, heartbeatsImage,
+			deployment.WithEnvs(map[string]string{
+				"POD_NAME":      "heartbeats",
+				"POD_NAMESPACE": env.Namespace(),
+			})))
+
+		f.Setup("install a sinkbinding", sb.Install(name, service.AsDestinationRef(sink), deployment.AsTrackerReference(subject)))
+
+		env.Test(ctx, t, f)
+	}
 }

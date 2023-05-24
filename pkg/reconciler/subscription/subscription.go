@@ -29,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 
+	"knative.dev/pkg/apis"
+
 	"knative.dev/pkg/apis/duck"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/kref"
@@ -195,11 +197,12 @@ func (r *Reconciler) resolveSubscriptionURIs(ctx context.Context, subscription *
 func (r *Reconciler) resolveSubscriber(ctx context.Context, subscription *v1.Subscription) pkgreconciler.Event {
 	// Resolve Subscriber.
 	subscriber := subscription.Spec.Subscriber.DeepCopy()
+	ctx = apis.WithinParent(ctx, subscription.ObjectMeta)
+
 	if !isNilOrEmptyDestination(subscriber) {
-		// Populate the namespace for the subscriber since it is in the namespace
-		if subscriber.Ref != nil {
-			subscriber.Ref.Namespace = subscription.Namespace
-		}
+		// This is done in the webhook too, but we need it here for backwards
+		// compatibility for subscriptions with subscriber.ref.namespace = "".
+		subscriber.SetDefaults(ctx)
 
 		// Resolve the group
 		if subscriber.Ref != nil && feature.FromContext(ctx).IsEnabled(feature.KReferenceGroup) {
@@ -237,11 +240,13 @@ func (r *Reconciler) resolveSubscriber(ctx context.Context, subscription *v1.Sub
 func (r *Reconciler) resolveReply(ctx context.Context, subscription *v1.Subscription) pkgreconciler.Event {
 	// Resolve Reply.
 	reply := subscription.Spec.Reply.DeepCopy()
+	ctx = apis.WithinParent(ctx, subscription.ObjectMeta)
+
 	if !isNilOrEmptyDestination(reply) {
-		// Populate the namespace for the subscriber since it is in the namespace
-		if reply.Ref != nil {
-			reply.Ref.Namespace = subscription.Namespace
-		}
+		// This is done in the webhook too, but we need it here for backwards
+		// compatibility for subscriptions with reply.ref.namespace = "".
+		reply.SetDefaults(ctx)
+
 		replyURI, err := r.destinationResolver.URIFromDestinationV1(ctx, *reply, subscription)
 		if err != nil {
 			logging.FromContext(ctx).Warnw("Failed to resolve reply",

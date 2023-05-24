@@ -17,19 +17,25 @@ limitations under the License.
 package broker_test
 
 import (
+	"embed"
 	"os"
 
 	eventingv1 "knative.dev/eventing/pkg/apis/duck/v1"
 	"knative.dev/eventing/test/rekt/resources/broker"
 	v1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/ptr"
+	testlog "knative.dev/reconciler-test/pkg/logging"
 	"knative.dev/reconciler-test/pkg/manifest"
 )
+
+//go:embed *.yaml
+var yaml embed.FS
 
 // The following examples validate the processing of the With* helper methods
 // applied to config and go template parser.
 
 func Example_min() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":       "foo",
@@ -37,7 +43,7 @@ func Example_min() {
 		"brokerName": "baz",
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -53,6 +59,7 @@ func Example_min() {
 }
 
 func Example_full() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":        "foo",
@@ -78,7 +85,7 @@ func Example_full() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -112,7 +119,7 @@ func Example_full() {
 }
 
 func ExampleWithBrokerClass() {
-
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -120,7 +127,7 @@ func ExampleWithBrokerClass() {
 	}
 	broker.WithBrokerClass("a-broker-class")(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -137,7 +144,36 @@ func ExampleWithBrokerClass() {
 	// spec:
 }
 
+func ExampleWithAnnotations() {
+	ctx := testlog.NewContext()
+	images := map[string]string{}
+	cfg := map[string]interface{}{
+		"name":      "foo",
+		"namespace": "bar",
+	}
+	broker.WithAnnotations(map[string]interface{}{
+		"eventing.knative.dev/foo": "bar",
+	})(cfg)
+
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	manifest.OutputYAML(os.Stdout, files)
+	// Output:
+	// apiVersion: eventing.knative.dev/v1
+	// kind: Broker
+	// metadata:
+	//   name: foo
+	//   namespace: bar
+	//   annotations:
+	//     eventing.knative.dev/foo: bar
+	// spec:
+}
+
 func ExampleWithDeadLetterSink() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -149,7 +185,7 @@ func ExampleWithDeadLetterSink() {
 		APIVersion: "deadapi",
 	}, "/extra/path")(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -173,6 +209,7 @@ func ExampleWithDeadLetterSink() {
 }
 
 func ExampleWithConfig() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -180,7 +217,7 @@ func ExampleWithConfig() {
 	}
 	broker.WithConfig("my-funky-config")(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -200,7 +237,39 @@ func ExampleWithConfig() {
 	//     apiVersion: v1
 }
 
+func ExampleWithConfigNamespace() {
+	ctx := testlog.NewContext()
+	images := map[string]string{}
+	cfg := map[string]interface{}{
+		"name":      "foo",
+		"namespace": "bar",
+	}
+
+	broker.WithConfigNamespace("knative-eventing")(cfg)
+	broker.WithConfig("my-funky-config")(cfg)
+
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	manifest.OutputYAML(os.Stdout, files)
+	// Output:
+	// apiVersion: eventing.knative.dev/v1
+	// kind: Broker
+	// metadata:
+	//   name: foo
+	//   namespace: bar
+	// spec:
+	//   config:
+	//     kind: ConfigMap
+	//     namespace: knative-eventing
+	//     name: my-funky-config
+	//     apiVersion: v1
+}
+
 func ExampleWithRetry() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -209,7 +278,7 @@ func ExampleWithRetry() {
 	exp := eventingv1.BackoffPolicyExponential
 	broker.WithRetry(42, &exp, ptr.String("2007-03-01T13:00:00Z/P1Y2M10DT2H30M"))(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -229,6 +298,7 @@ func ExampleWithRetry() {
 }
 
 func ExampleWithRetry_onlyCount() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -236,7 +306,7 @@ func ExampleWithRetry_onlyCount() {
 	}
 	broker.WithRetry(42, nil, nil)(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}

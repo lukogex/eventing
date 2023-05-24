@@ -282,22 +282,6 @@ DeliveryStatus
 resolved delivery options.</p>
 </td>
 </tr>
-<tr>
-<td>
-<code>deadLetterChannel</code><br/>
-<em>
-<a href="https://pkg.go.dev/knative.dev/pkg/apis/duck/v1#KReference">
-knative.dev/pkg/apis/duck/v1.KReference
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>DeadLetterChannel is a KReference and is set by the channel when it supports native error handling via a channel
-Failed messages are delivered here.
-Deprecated in favor of DeliveryStatus, to be removed September 2022.</p>
-</td>
-</tr>
 </tbody>
 </table>
 <h3 id="duck.knative.dev/v1.DeliverySpec">DeliverySpec
@@ -1943,17 +1927,20 @@ knative.dev/pkg/apis/duck/v1.Status
 </tr>
 <tr>
 <td>
-<code>address</code><br/>
+<code>AddressStatus</code><br/>
 <em>
-<a href="https://pkg.go.dev/knative.dev/pkg/apis/duck/v1#Addressable">
-knative.dev/pkg/apis/duck/v1.Addressable
+<a href="https://pkg.go.dev/knative.dev/pkg/apis/duck/v1#AddressStatus">
+knative.dev/pkg/apis/duck/v1.AddressStatus
 </a>
 </em>
 </td>
 <td>
+<p>
+(Members of <code>AddressStatus</code> are embedded into this type.)
+</p>
 <em>(Optional)</em>
-<p>Broker is Addressable. It exposes the endpoint as an URI to get events
-delivered into the Broker mesh.</p>
+<p>AddressStatus is the part where the Broker fulfills the Addressable contract.
+It exposes the endpoint as an URI to get events delivered into the Broker mesh.</p>
 </td>
 </tr>
 <tr>
@@ -2047,12 +2034,12 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Exact evaluates to true if the value of the matching CloudEvents
-attribute matches exactly the String value specified (case-sensitive).
-Exact must contain exactly one property, where the key is the name of the
-CloudEvents attribute to be matched, and its value is the String value to
-use in the comparison. The attribute name and value specified in the filter
-expression cannot be empty strings.</p>
+<p>Exact evaluates to true if the values of the matching CloudEvents attributes MUST
+all exactly match with the associated value String specified (case-sensitive).
+The keys are the names of the CloudEvents attributes to be matched,
+and their values are the String values to use in the comparison.
+The attribute name and value specified in the filter express MUST NOT be
+empty strings.</p>
 </td>
 </tr>
 <tr>
@@ -2064,12 +2051,12 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Prefix evaluates to true if the value of the matching CloudEvents
-attribute starts with the String value specified (case-sensitive). Prefix
-must contain exactly one property, where the key is the name of the
-CloudEvents attribute to be matched, and its value is the String value to
-use in the comparison. The attribute name and value specified in the filter
-expression cannot be empty strings.</p>
+<p>Prefix evaluates to true if the values of the matching CloudEvents attributes MUST
+all start with the associated value String specified (case sensitive).
+The keys are the names of the CloudEvents attributes to be matched,
+and their values are the String values to use in the comparison.
+The attribute name and value specified in the filter express MUST NOT be
+empty strings.</p>
 </td>
 </tr>
 <tr>
@@ -2081,12 +2068,12 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>Suffix evaluates to true if the value of the matching CloudEvents
-attribute ends with the String value specified (case-sensitive). Suffix
-must contain exactly one property, where the key is the name of the
-CloudEvents attribute to be matched, and its value is the String value to
-use in the comparison. The attribute name and value specified in the filter
-expression cannot be empty strings.</p>
+<p>Suffix evaluates to true if the values of the matching CloudEvents attributes MUST
+all end with the associated value String specified (case sensitive).
+The keys are the names of the CloudEvents attributes to be matched,
+and their values are the String values to use in the comparison.
+The attribute name and value specified in the filter express MUST NOT be
+empty strings.</p>
 </td>
 </tr>
 <tr>
@@ -2146,7 +2133,7 @@ string values are supported.</p>
 <p>
 <p>TriggerFilterAttributes is a map of context attribute names to values for
 filtering by equality. Only exact matches will pass the filter. You can use
-the value &ldquo; to indicate all strings match.</p>
+the value ” to indicate all strings match.</p>
 </p>
 <h3 id="eventing.knative.dev/v1.TriggerSpec">TriggerSpec
 </h3>
@@ -3777,8 +3764,7 @@ knative.dev/pkg/apis/duck/v1.Destination
 </em>
 </td>
 <td>
-<em>(Optional)</em>
-<p>Subscriber is reference to (optional) function for processing events.
+<p>Subscriber is reference to function for processing events.
 Events from the Channel will be delivered here and replies are
 sent to a Destination as specified by the Reply.</p>
 </td>
@@ -4108,8 +4094,7 @@ knative.dev/pkg/apis/duck/v1.Destination
 </em>
 </td>
 <td>
-<em>(Optional)</em>
-<p>Subscriber is reference to (optional) function for processing events.
+<p>Subscriber is reference to function for processing events.
 Events from the Channel will be delivered here and replies are
 sent to a Destination as specified by the Reply.</p>
 </td>
@@ -4407,6 +4392,21 @@ string
 <em>(Optional)</em>
 <p>ServiceAccountName is the name of the ServiceAccount to use to run this
 source. Defaults to default if not set.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespaceSelector</code><br/>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NamespaceSelector is a label selector to capture the namespaces that
+should be watched by the source.</p>
 </td>
 </tr>
 </table>
@@ -5001,6 +5001,21 @@ string
 source. Defaults to default if not set.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>namespaceSelector</code><br/>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NamespaceSelector is a label selector to capture the namespaces that
+should be watched by the source.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="sources.knative.dev/v1.ApiServerSourceStatus">ApiServerSourceStatus
@@ -5039,6 +5054,17 @@ processed by the controller.
 state.
 * SinkURI - the current active sink URI that has been configured for the
 Source.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespaces</code><br/>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>Namespaces show the namespaces currently watched by the ApiServerSource</p>
 </td>
 </tr>
 </tbody>

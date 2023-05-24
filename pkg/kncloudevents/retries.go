@@ -83,7 +83,7 @@ func RetryConfigFromDeliverySpec(spec v1.DeliverySpec) (RetryConfig, error) {
 
 	retryConfig := NoRetries()
 
-	retryConfig.CheckRetry = RetryIfGreaterThan300
+	retryConfig.CheckRetry = SelectiveRetry
 
 	if spec.Retry != nil {
 		retryConfig.RetryMax = int(*spec.Retry)
@@ -131,20 +131,16 @@ func RetryConfigFromDeliverySpec(spec v1.DeliverySpec) (RetryConfig, error) {
 	return retryConfig, nil
 }
 
-// RetryIfGreaterThan300 is a simple default implementation
-func RetryIfGreaterThan300(_ context.Context, response *http.Response, err error) (bool, error) {
-	return !(response != nil && (response.StatusCode < 300 && response.StatusCode != -1)), err
-}
-
 // SelectiveRetry is an alternative function to determine whether to retry based on response
 //
 // Note - Returning true indicates a retry should occur.  Returning an error will result in that
-//        error being returned instead of any errors from the Request.
+//
+//	error being returned instead of any errors from the Request.
 //
 // A retry is triggered for:
 // * nil responses
 // * emitted errors
-// * status codes that are 5XX, 404, 409, 429 as well if the statuscode is -1.
+// * status codes that are 5XX, 404, 408, 409, 429 as well if the statuscode is -1.
 func SelectiveRetry(_ context.Context, response *http.Response, err error) (bool, error) {
 
 	// Retry Any Nil HTTP Response
@@ -167,12 +163,13 @@ func SelectiveRetry(_ context.Context, response *http.Response, err error) (bool
 	// 404  Although we would ideally not want to retry a permanent "Not Found"
 	//      response, a 404 can be returned when a pod is in the process of becoming
 	//      ready, so a retry can be a useful thing in this situation.
+	// 408  Request Timeout is a good practice to issue a retry.
 	// 409  Returned by the E2E tests, so we must retry when "Conflict" is received, or the
 	//      tests will fail (see knative.dev/eventing/test/lib/recordevents/receiver/receiver.go)
 	// 429  Since retry typically involves a delay (usually an exponential backoff),
 	//      retrying after receiving a "Too Many Requests" response is useful.
 
-	if statusCode >= 500 || statusCode == 404 || statusCode == 429 || statusCode == 409 {
+	if statusCode >= 500 || statusCode == 404 || statusCode == 429 || statusCode == 408 || statusCode == 409 {
 		return true, nil
 	} else if statusCode >= 300 && statusCode <= 399 {
 		return false, nil

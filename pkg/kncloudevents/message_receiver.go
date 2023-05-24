@@ -18,6 +18,7 @@ package kncloudevents
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -78,6 +79,41 @@ func WithDrainQuietPeriod(duration time.Duration) HTTPMessageReceiverOption {
 	}
 }
 
+// WithTLSConfig configures the TLS config for the receiver.
+func WithTLSConfig(cfg *tls.Config) HTTPMessageReceiverOption {
+	return func(h *HTTPMessageReceiver) {
+		if h.server == nil {
+			h.server = newServer()
+		}
+
+		h.server.TLSConfig = cfg
+	}
+}
+
+// WithWriteTimeout sets the HTTP server's WriteTimeout. It covers the time between end of reading
+// Request Header to end of writing response.
+func WithWriteTimeout(duration time.Duration) HTTPMessageReceiverOption {
+	return func(h *HTTPMessageReceiver) {
+		if h.server == nil {
+			h.server = newServer()
+		}
+
+		h.server.WriteTimeout = duration
+	}
+}
+
+// WithReadTimeout sets the HTTP server's ReadTimeout. It covers the duration from reading the entire request
+// (Headers + Body)
+func WithReadTimeout(duration time.Duration) HTTPMessageReceiverOption {
+	return func(h *HTTPMessageReceiver) {
+		if h.server == nil {
+			h.server = newServer()
+		}
+
+		h.server.ReadTimeout = duration
+	}
+}
+
 // Blocking
 func (recv *HTTPMessageReceiver) StartListen(ctx context.Context, handler http.Handler) error {
 	var err error
@@ -90,15 +126,20 @@ func (recv *HTTPMessageReceiver) StartListen(ctx context.Context, handler http.H
 		HealthCheck: recv.checker,
 		QuietPeriod: recv.drainQuietPeriod,
 	}
-	recv.server = &http.Server{
-		Addr:    recv.listener.Addr().String(),
-		Handler: drainer,
+	if recv.server == nil {
+		recv.server = newServer()
 	}
+	recv.server.Addr = recv.listener.Addr().String()
+	recv.server.Handler = drainer
 
 	errChan := make(chan error, 1)
 	go func() {
 		close(recv.Ready)
-		errChan <- recv.server.Serve(recv.listener)
+		if recv.server.TLSConfig == nil {
+			errChan <- recv.server.Serve(recv.listener)
+		} else {
+			errChan <- recv.server.ServeTLS(recv.listener, "", "")
+		}
 	}()
 
 	// wait for the server to return or ctx.Done().
@@ -135,5 +176,11 @@ func CreateHandler(handler http.Handler) http.Handler {
 	return &ochttp.Handler{
 		Propagation: tracecontextb3.TraceContextEgress,
 		Handler:     handler,
+	}
+}
+
+func newServer() *http.Server {
+	return &http.Server{
+		ReadTimeout: 10 * time.Second,
 	}
 }

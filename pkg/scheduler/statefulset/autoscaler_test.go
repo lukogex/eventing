@@ -23,16 +23,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	v1 "k8s.io/client-go/listers/core/v1"
 	gtesting "k8s.io/client-go/testing"
+	"knative.dev/pkg/reconciler"
 
-	listers "knative.dev/eventing/pkg/reconciler/testing/v1"
 	kubeclient "knative.dev/pkg/client/injection/kube/client/fake"
 	_ "knative.dev/pkg/client/injection/kube/informers/apps/v1/statefulset/fake"
+
+	listers "knative.dev/eventing/pkg/reconciler/testing/v1"
 
 	duckv1alpha1 "knative.dev/eventing/pkg/apis/duck/v1alpha1"
 	"knative.dev/eventing/pkg/scheduler"
@@ -377,7 +380,16 @@ func TestAutoscaler(t *testing.T) {
 				return nil
 			}
 
-			autoscaler := NewAutoscaler(ctx, testNs, sfsName, vpodClient.List, stateAccessor, noopEvictor, 10*time.Second, int32(10)).(*autoscaler)
+			cfg := &Config{
+				StatefulSetNamespace: testNs,
+				StatefulSetName:      sfsName,
+				VPodLister:           vpodClient.List,
+				Evictor:              noopEvictor,
+				RefreshPeriod:        10 * time.Second,
+				PodCapacity:          10,
+			}
+			autoscaler := newAutoscaler(ctx, cfg, stateAccessor)
+			_ = autoscaler.Promote(reconciler.UniversalBucket(), nil)
 
 			for _, vpod := range tc.vpods {
 				vpodClient.Append(vpod)
@@ -425,7 +437,16 @@ func TestAutoscalerScaleDownToZero(t *testing.T) {
 		return nil
 	}
 
-	autoscaler := NewAutoscaler(ctx, testNs, sfsName, vpodClient.List, stateAccessor, noopEvictor, 2*time.Second, int32(10)).(*autoscaler)
+	cfg := &Config{
+		StatefulSetNamespace: testNs,
+		StatefulSetName:      sfsName,
+		VPodLister:           vpodClient.List,
+		Evictor:              noopEvictor,
+		RefreshPeriod:        2 * time.Second,
+		PodCapacity:          10,
+	}
+	autoscaler := newAutoscaler(ctx, cfg, stateAccessor)
+	_ = autoscaler.Promote(reconciler.UniversalBucket(), nil)
 
 	done := make(chan bool)
 	go func() {
@@ -846,7 +867,17 @@ func TestCompactor(t *testing.T) {
 				return nil
 			}
 
-			autoscaler := NewAutoscaler(ctx, testNs, sfsName, vpodClient.List, stateAccessor, recordEviction, 10*time.Second, int32(10)).(*autoscaler)
+			cfg := &Config{
+				StatefulSetNamespace: testNs,
+				StatefulSetName:      sfsName,
+				VPodLister:           vpodClient.List,
+				Evictor:              recordEviction,
+				RefreshPeriod:        10 * time.Second,
+				PodCapacity:          10,
+			}
+			autoscaler := newAutoscaler(ctx, cfg, stateAccessor)
+			_ = autoscaler.Promote(reconciler.UniversalBucket(), func(bucket reconciler.Bucket, name types.NamespacedName) {})
+			assert.Equal(t, true, autoscaler.isLeader.Load())
 
 			for _, vpod := range tc.vpods {
 				vpodClient.Append(vpod)
@@ -888,6 +919,15 @@ func TestCompactor(t *testing.T) {
 			if len(evictions) != 0 {
 				t.Fatalf("unexpected evictions %v", evictions)
 			}
+
+			autoscaler.Demote(reconciler.UniversalBucket())
+			assert.Equal(t, false, autoscaler.isLeader.Load())
 		})
 	}
+}
+
+func TestEphemeralKeyStableValues(t *testing.T) {
+	// Do not modify expected values
+	assert.Equal(t, "knative-eventing", ephemeralLeaderElectionObject.Namespace)
+	assert.Equal(t, "autoscaler-ephemeral", ephemeralLeaderElectionObject.Name)
 }

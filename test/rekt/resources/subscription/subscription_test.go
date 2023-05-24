@@ -17,18 +17,24 @@ limitations under the License.
 package subscription_test
 
 import (
+	"embed"
 	"os"
 
 	v1 "knative.dev/pkg/apis/duck/v1"
+	testlog "knative.dev/reconciler-test/pkg/logging"
 	"knative.dev/reconciler-test/pkg/manifest"
 
 	"knative.dev/eventing/test/rekt/resources/subscription"
 )
 
+//go:embed *.yaml
+var yaml embed.FS
+
 // The following examples validate the processing of the With* helper methods
 // applied to config and go template parser.
 
 func Example_min() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":       "foo",
@@ -43,7 +49,7 @@ func Example_min() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -65,13 +71,14 @@ func Example_min() {
 }
 
 func Example_zero() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
 		"namespace": "bar",
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -87,6 +94,7 @@ func Example_zero() {
 }
 
 func Example_full() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -122,7 +130,7 @@ func Example_full() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -164,6 +172,7 @@ func Example_full() {
 }
 
 func ExampleWithChannel() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -175,7 +184,7 @@ func ExampleWithChannel() {
 		Name:       "chname",
 		APIVersion: "chversion",
 	})(cfg)
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -195,6 +204,7 @@ func ExampleWithChannel() {
 }
 
 func ExampleWithSubscriber() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -206,7 +216,7 @@ func ExampleWithSubscriber() {
 		Name:       "subname",
 		APIVersion: "subversion",
 	}, "/extra/path")(cfg)
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -229,6 +239,7 @@ func ExampleWithSubscriber() {
 }
 
 func ExampleWithReply() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -241,7 +252,7 @@ func ExampleWithReply() {
 		APIVersion: "repversion",
 	}, "/extra/path")(cfg)
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}

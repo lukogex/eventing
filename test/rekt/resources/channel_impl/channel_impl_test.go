@@ -17,18 +17,24 @@ limitations under the License.
 package channel_impl_test
 
 import (
+	"embed"
 	"log"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
 	"knative.dev/eventing/test/rekt/resources/channel_impl"
+	testlog "knative.dev/reconciler-test/pkg/logging"
 	"knative.dev/reconciler-test/pkg/manifest"
 )
+
+//go:embed *.yaml
+var yaml embed.FS
 
 // The following examples validate the processing of the With* helper methods
 // applied to config and go template parser.
 
 func Example_min() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":       "foo",
@@ -37,7 +43,7 @@ func Example_min() {
 		"kind":       "Sample",
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -53,6 +59,7 @@ func Example_min() {
 }
 
 func Example_env() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	apiVersion, kind := channel_impl.GVK().ToAPIVersionAndKind()
 	cfg := map[string]interface{}{
@@ -62,7 +69,7 @@ func Example_env() {
 		"apiVersion": apiVersion,
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -78,6 +85,7 @@ func Example_env() {
 }
 
 func Example_setenv() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 
 	_ = os.Setenv("CHANNEL_GROUP_KIND", "Sample.example.com")
@@ -95,7 +103,7 @@ func Example_setenv() {
 		"apiVersion": apiVersion,
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -111,6 +119,7 @@ func Example_setenv() {
 }
 
 func Example_full() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":       "foo",
@@ -132,7 +141,7 @@ func Example_full() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}

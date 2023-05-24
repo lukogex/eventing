@@ -45,8 +45,16 @@ type Environment interface {
 	// Test will execute the feature test using the given Context and T.
 	Test(ctx context.Context, t *testing.T, f *feature.Feature)
 
+	// ParallelTest will execute the feature test using the given Context and T in parallel with
+	// other parallel features.
+	ParallelTest(ctx context.Context, t *testing.T, f *feature.Feature)
+
 	// TestSet will execute the feature set using the given Context and T.
 	TestSet(ctx context.Context, t *testing.T, fs *feature.FeatureSet)
+
+	// ParallelTestSet will execute the feature set using the given Context and T with each feature
+	// running in parallel with other parallel features.
+	ParallelTestSet(ctx context.Context, t *testing.T, f *feature.FeatureSet)
 
 	// Namespace returns the namespace of this environment.
 	Namespace() string
@@ -56,12 +64,6 @@ type Environment interface {
 
 	// FeatureState returns the requirement level for this environment.
 	FeatureState() feature.States
-
-	// Images returns back the name to container image mapping to be used with
-	// yaml template parsing.
-	// The map will be in the form `key`: `image` and `key` and the intention
-	// usage is to use this key to string substitute for image in test yaml.
-	Images() map[string]string
 
 	// TemplateConfig returns the base template config to use when processing
 	// yaml templates.
@@ -81,4 +83,18 @@ type Environment interface {
 	// namespace will be deleted if it was created by the environment,
 	// References will be cleaned up if registered.
 	Finish()
+}
+
+// UnionOpts joins the given opts into a single opts function.
+func UnionOpts(opts ...EnvOpts) EnvOpts {
+	return func(ctx context.Context, env Environment) (context.Context, error) {
+		for _, opt := range opts {
+			var err error
+			ctx, err = opt(ctx, env)
+			if err != nil {
+				return ctx, err
+			}
+		}
+		return ctx, nil
+	}
 }

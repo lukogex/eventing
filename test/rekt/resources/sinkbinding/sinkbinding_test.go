@@ -17,15 +17,21 @@ limitations under the License.
 package sinkbinding_test
 
 import (
+	"embed"
 	"os"
 
+	testlog "knative.dev/reconciler-test/pkg/logging"
 	"knative.dev/reconciler-test/pkg/manifest"
 )
+
+//go:embed *.yaml
+var yaml embed.FS
 
 // The following examples validate the processing of the With* helper methods
 // applied to config and go template parser.
 
 func Example_min() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -44,7 +50,7 @@ func Example_min() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -71,6 +77,7 @@ func Example_min() {
 }
 
 func Example_full() {
+	ctx := testlog.NewContext()
 	images := map[string]string{}
 	cfg := map[string]interface{}{
 		"name":      "foo",
@@ -100,7 +107,7 @@ func Example_full() {
 		},
 	}
 
-	files, err := manifest.ExecuteLocalYAML(images, cfg)
+	files, err := manifest.ExecuteYAML(ctx, yaml, images, cfg)
 	if err != nil {
 		panic(err)
 	}

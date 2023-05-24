@@ -23,6 +23,8 @@ import (
 	"knative.dev/eventing/test/upgrade/prober/wathola/config"
 )
 
+const FinishedEventPrefix = "finish event"
+
 var mutex = sync.RWMutex{}
 var lastProgressReport = time.Now()
 
@@ -93,8 +95,10 @@ func (s *stepStore) Count() int {
 func (f *finishedStore) RegisterFinished(finished *Finished) {
 	if f.received > 0 {
 		f.errors.throwDuplicated(
-			"finish event should be received only once, received %d",
-			f.received+1)
+			"%s should be received only once, received %d",
+			FinishedEventPrefix, f.received+1)
+		// We don't want to record all failures again.
+		return
 	}
 	f.received++
 	f.eventsSent = finished.EventsSent
@@ -115,8 +119,12 @@ func (f *finishedStore) RegisterFinished(finished *Finished) {
 	}
 	// check down time
 	for _, unavailablePeriod := range finished.UnavailablePeriods {
-		if unavailablePeriod > config.Instance.Receiver.Errors.UnavailablePeriodToReport {
-			f.errors.throwUnavail("actual unavailable period %v is over down time limit of %v", unavailablePeriod, config.Instance.Receiver.Errors.UnavailablePeriodToReport)
+		if unavailablePeriod.Period > config.Instance.Receiver.Errors.UnavailablePeriodToReport {
+			f.errors.throwUnavail("event #%d had unavailable period %v which is over down time limit of %v, last error %v",
+				unavailablePeriod.Step.Number,
+				unavailablePeriod.Period,
+				config.Instance.Receiver.Errors.UnavailablePeriodToReport,
+				unavailablePeriod.LastErr)
 			f.errors.state = Failed
 		}
 		log.Infof("detecting unavailable time %v", unavailablePeriod)

@@ -41,11 +41,13 @@ import (
 // ReceiveAdapterArgs are the arguments needed to create a ApiServer Receive Adapter.
 // Every field is required.
 type ReceiveAdapterArgs struct {
-	Image   string
-	Source  *v1.ApiServerSource
-	Labels  map[string]string
-	SinkURI string
-	Configs reconcilersource.ConfigAccessor
+	Image         string
+	Source        *v1.ApiServerSource
+	Labels        map[string]string
+	SinkURI       string
+	Configs       reconcilersource.ConfigAccessor
+	Namespaces    []string
+	AllNamespaces bool
 }
 
 // MakeReceiveAdapter generates (but does not insert into K8s) the Receive Adapter Deployment for
@@ -75,7 +77,7 @@ func MakeReceiveAdapter(args *ReceiveAdapterArgs) (*appsv1.Deployment, error) {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						"sidecar.istio.io/inject": "false", // needs to talk to the api server.
+						"sidecar.istio.io/inject": "true",
 					},
 					Labels: args.Labels,
 				},
@@ -101,6 +103,13 @@ func MakeReceiveAdapter(args *ReceiveAdapterArgs) (*appsv1.Deployment, error) {
 									},
 								},
 							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.Bool(false),
+								ReadOnlyRootFilesystem:   ptr.Bool(true),
+								RunAsNonRoot:             ptr.Bool(true),
+								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+								SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+							},
 						},
 					},
 				},
@@ -111,10 +120,11 @@ func MakeReceiveAdapter(args *ReceiveAdapterArgs) (*appsv1.Deployment, error) {
 
 func makeEnv(args *ReceiveAdapterArgs) ([]corev1.EnvVar, error) {
 	cfg := &apiserver.Config{
-		Namespace:     args.Source.Namespace,
+		Namespaces:    args.Namespaces,
 		Resources:     make([]apiserver.ResourceWatch, 0, len(args.Source.Spec.Resources)),
 		ResourceOwner: args.Source.Spec.ResourceOwner,
 		EventMode:     args.Source.Spec.EventMode,
+		AllNamespaces: args.AllNamespaces,
 	}
 
 	for _, r := range args.Source.Spec.Resources {

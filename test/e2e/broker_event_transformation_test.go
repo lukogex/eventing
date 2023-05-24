@@ -31,17 +31,20 @@ import (
 /*
 TestEventTransformationForTrigger tests the following scenario:
 
-                         5                 4
-                   ------------- ----------------------
-                   |           | |                    |
-             1     v	 2     | v        3           |
+	            5                 4
+	      ------------- ----------------------
+	      |           | |                    |
+	1     v	 2     | v        3           |
+
 EventSource ---> Broker ---> Trigger1 -------> Service(Transformation)
-                   |
-                   | 6                   7
-                   |-------> Trigger2 -------> Service(Logger)
+
+	|
+	| 6                   7
+	|-------> Trigger2 -------> Service(Logger)
 
 Note: the number denotes the sequence of the event that flows in this test case.
 */
+// Deprecated, use reconciler-test based tests.
 func TestEventTransformationForTriggerV1BrokerV1(t *testing.T) {
 	runTest(t, "v1", "v1")
 }

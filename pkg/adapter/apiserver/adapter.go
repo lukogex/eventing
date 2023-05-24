@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+
 	"knative.dev/eventing/pkg/adapter/v2"
 	v1 "knative.dev/eventing/pkg/apis/sources/v1"
 )
@@ -94,21 +95,25 @@ func (a *apiServerAdapter) start(ctx context.Context, stopCh <-chan struct{}) er
 		exists := false
 		for _, apires := range resources.APIResources {
 			if apires.Name == configRes.GVR.Resource {
-
-				var res dynamic.ResourceInterface
-				if apires.Namespaced {
-					res = a.k8s.Resource(configRes.GVR).Namespace(a.config.Namespace)
+				var resources []dynamic.ResourceInterface
+				if apires.Namespaced && !a.config.AllNamespaces {
+					for _, ns := range a.config.Namespaces {
+						resources = append(resources, a.k8s.Resource(configRes.GVR).Namespace(ns))
+					}
 				} else {
-					res = a.k8s.Resource(configRes.GVR)
+					resources = append(resources, a.k8s.Resource(configRes.GVR))
 				}
 
-				lw := &cache.ListWatch{
-					ListFunc:  asUnstructuredLister(ctx, res.List, configRes.LabelSelector),
-					WatchFunc: asUnstructuredWatcher(ctx, res.Watch, configRes.LabelSelector),
+				for _, res := range resources {
+					lw := &cache.ListWatch{
+						ListFunc:  asUnstructuredLister(ctx, res.List, configRes.LabelSelector),
+						WatchFunc: asUnstructuredWatcher(ctx, res.Watch, configRes.LabelSelector),
+					}
+
+					reflector := cache.NewReflector(lw, &unstructured.Unstructured{}, delegate, resyncPeriod)
+					go reflector.Run(stop)
 				}
 
-				reflector := cache.NewReflector(lw, &unstructured.Unstructured{}, delegate, resyncPeriod)
-				go reflector.Run(stop)
 				exists = true
 				break
 			}
@@ -121,6 +126,9 @@ func (a *apiServerAdapter) start(ctx context.Context, stopCh <-chan struct{}) er
 
 	srv := &http.Server{
 		Addr: ":8080",
+		// Configure read header timeout to overcome potential Slowloris Attack because ReadHeaderTimeout is not
+		// configured in the http.Server.
+		ReadHeaderTimeout: 10 * time.Second,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),

@@ -102,7 +102,7 @@ func TestMakeReceiveAdapters(t *testing.T) {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						"sidecar.istio.io/inject": "false",
+						"sidecar.istio.io/inject": "true",
 					},
 					Labels: map[string]string{
 						"test-key1": "test-value1",
@@ -129,7 +129,7 @@ func TestMakeReceiveAdapters(t *testing.T) {
 									Value: "sink-uri",
 								}, {
 									Name:  "K_SOURCE_CONFIG",
-									Value: `{"namespace":"source-namespace","resources":[{"gvr":{"Group":"","Version":"","Resource":"namespaces"}},{"gvr":{"Group":"batch","Version":"v1","Resource":"jobs"}},{"gvr":{"Group":"","Version":"","Resource":"pods"},"selector":"test-key1=test-value1"}],"owner":{"apiVersion":"custom/v1","kind":"Parent"},"mode":"Resource"}`,
+									Value: `{"namespaces":["source-namespace"],"allNamespaces":false,"resources":[{"gvr":{"Group":"","Version":"","Resource":"namespaces"}},{"gvr":{"Group":"batch","Version":"v1","Resource":"jobs"}},{"gvr":{"Group":"","Version":"","Resource":"pods"},"selector":"test-key1=test-value1"}],"owner":{"apiVersion":"custom/v1","kind":"Parent"},"mode":"Resource"}`,
 								}, {
 									Name:  "SYSTEM_NAMESPACE",
 									Value: "knative-testing",
@@ -163,6 +163,13 @@ func TestMakeReceiveAdapters(t *testing.T) {
 										Port: intstr.FromString("health"),
 									},
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr.Bool(false),
+								ReadOnlyRootFilesystem:   ptr.Bool(true),
+								RunAsNonRoot:             ptr.Bool(true),
+								Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+								SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 							},
 						},
 					},
@@ -202,8 +209,9 @@ func TestMakeReceiveAdapters(t *testing.T) {
 					"test-key1": "test-value1",
 					"test-key2": "test-value2",
 				},
-				SinkURI: "sink-uri",
-				Configs: &source.EmptyVarsGenerator{},
+				SinkURI:    "sink-uri",
+				Configs:    &source.EmptyVarsGenerator{},
+				Namespaces: []string{"source-namespace"},
 			})
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {

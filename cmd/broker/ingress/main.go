@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -48,7 +49,8 @@ import (
 )
 
 // TODO make these constants configurable (either as env variables, config map, or part of broker spec).
-//  Issue: https://github.com/knative/eventing/issues/1777
+//
+//	Issue: https://github.com/knative/eventing/issues/1777
 const (
 	// Constants for the underlying HTTP Client transport. These would enable better connection reuse.
 	// Purposely set them to be equal, as the ingress only connects to its channel.
@@ -119,7 +121,8 @@ func main() {
 	configMapWatcher.Watch(logging.ConfigMapName(), logging.UpdateLevelFromConfigMap(sl, atomicLevel, component))
 
 	bin := fmt.Sprintf("%s.%s", names.BrokerIngressName, system.Namespace())
-	if err = tracing.SetupDynamicPublishing(sl, configMapWatcher, bin, tracingconfig.ConfigName); err != nil {
+	tracer, err := tracing.SetupPublishingWithDynamicConfig(sl, configMapWatcher, bin, tracingconfig.ConfigName)
+	if err != nil {
 		logger.Fatal("Error setting up trace publishing", zap.Error(err))
 	}
 
@@ -159,6 +162,7 @@ func main() {
 	if err = h.Start(ctx); err != nil {
 		logger.Error("ingress.Start() returned an error", zap.Error(err))
 	}
+	tracer.Shutdown(context.Background())
 	logger.Info("Exiting...")
 }
 

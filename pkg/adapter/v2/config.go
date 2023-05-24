@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -65,6 +65,11 @@ type EnvConfig struct {
 	// Sink is the URI messages will be sent.
 	Sink string `envconfig:"K_SINK"`
 
+	// CACerts are the Certification Authority (CA) certificates in PEM format
+	// according to https://www.rfc-editor.org/rfc/rfc7468.
+	// +optional
+	CACerts *string `envconfig:"K_CA_CERTS"`
+
 	// CEOverrides are the CloudEvents overrides to be applied to the outbound event.
 	CEOverrides string `envconfig:"K_CE_OVERRIDES"`
 
@@ -104,6 +109,9 @@ type EnvConfigAccessor interface {
 	// Get the URI where messages will be forwarded to.
 	GetSink() string
 
+	// GetCACerts gets the CACerts of the Sink.
+	GetCACerts() *string
+
 	// Get the namespace of the adapter.
 	GetNamespace() string
 
@@ -116,7 +124,7 @@ type EnvConfigAccessor interface {
 	// Get the parsed logger.
 	GetLogger() *zap.SugaredLogger
 
-	SetupTracing(*zap.SugaredLogger) error
+	SetupTracing(*zap.SugaredLogger) (tracing.Tracer, error)
 
 	GetCloudEventOverrides() (*duckv1.CloudEventOverrides, error)
 
@@ -163,6 +171,10 @@ func (e *EnvConfig) GetSink() string {
 	return e.Sink
 }
 
+func (e *EnvConfig) GetCACerts() *string {
+	return e.CACerts
+}
+
 func (e *EnvConfig) GetNamespace() string {
 	return e.Namespace
 }
@@ -179,12 +191,12 @@ func (e *EnvConfig) GetSinktimeout() int {
 	return -1
 }
 
-func (e *EnvConfig) SetupTracing(logger *zap.SugaredLogger) error {
+func (e *EnvConfig) SetupTracing(logger *zap.SugaredLogger) (tracing.Tracer, error) {
 	config, err := tracingconfig.JSONToTracingConfig(e.TracingConfigJson)
 	if err != nil {
 		logger.Warn("Tracing configuration is invalid, using the no-op default", zap.Error(err))
 	}
-	return tracing.SetupStaticPublishing(logger, "", config)
+	return tracing.SetupPublishingWithStaticConfig(logger, "", config)
 }
 
 func (e *EnvConfig) GetCloudEventOverrides() (*duckv1.CloudEventOverrides, error) {

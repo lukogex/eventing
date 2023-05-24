@@ -44,6 +44,7 @@ import (
 	"knative.dev/eventing/pkg/kncloudevents"
 
 	logtesting "knative.dev/pkg/logging/testing"
+	_ "knative.dev/pkg/system/testing"
 )
 
 func TestNewMessageDispatcher(t *testing.T) {
@@ -111,12 +112,13 @@ func TestDispatcher_dispatch(t *testing.T) {
 	}
 
 	// tracing publishing is configured to let the code pass in all "critical" branches
-	tracing.SetupStaticPublishing(logger.Sugar(), "localhost", &tracingconfig.Config{
+	tracer, _ := tracing.SetupPublishingWithStaticConfig(logger.Sugar(), "localhost", &tracingconfig.Config{
 		Backend:        tracingconfig.Zipkin,
 		Debug:          true,
 		SampleRate:     1.0,
 		ZipkinEndpoint: "http://zipkin.zipkin.svc.cluster.local:9411/api/v2/spans",
 	})
+	defer tracer.Shutdown(context.Background())
 
 	port, err := freePort()
 	if err != nil {
